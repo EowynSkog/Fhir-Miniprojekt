@@ -1,0 +1,78 @@
+<Encounter xmlns="http://hl7.org/fhir">
+   <text>
+      <status value="generated"/>
+      <div xmlns="http://www.w3.org/1999/xhtml">Wegen des eingetrübten Bewusstseinszustands entscheidet der aufnehmende Arzt Adam Careful die direkte Aufnahme auf die chirurgische Intensivstation UKSH ICU 1</div>
+   </text>
+   <identifier>
+      <system value="http://www.kh-hh.de/mio/Encounter"/>
+      <value value="EN04840"/>
+   </identifier>
+   <status value="arrived"/>
+   <class>
+      <system value="http://hl7.org/fhir/v3/ActCode"/>
+      <code value="ACUTE"/>
+      <display value="inpatient acute"/>
+   </class>
+   <priority>
+      <coding>
+         <system value="http://hl7.org/fhir/v3/ActPriority"/>
+         <code value="EL"/>
+         <display value="elective"/>
+      </coding>
+   </priority>
+   <incomingReferral>
+      <reference value="urn:uuid:c422ba16-e6e2-4497-bf21-ca63fe0f1cbd"/>
+   </incomingReferral>
+   <participant>
+      <type>
+         <coding>
+            <system value="http://hl7.org/fhir/v3/ParticipationType"/>
+            <code value="ADM"/>
+            <display value="admitter"/>
+         </coding>
+      </type>
+      <individual>
+         <reference value="http://funke.imi.uni-luebeck.de/public/base/Practitioner/11860"/>
+      </individual>
+   </participant>
+   <period>
+      <start value="2017-10-01T00:00:00+02:00"/>
+   </period>
+   <reason>
+      <coding>
+         <system value="http://snomed.info/sct"/>
+         <code value="407153006"/>
+         <display value="Motor vehicle injury (disorder)"/>
+      </coding>
+   </reason>
+   <diagnosis>
+      <role>
+         <coding>
+            <system value="http://hl7.org/fhir/diagnosis-role"/>
+            <code value="AD"/>
+            <display value="Admission diagnosis"/>
+         </coding>
+      </role>
+   </diagnosis>
+   <diagnosis>
+      <role>
+         <coding>
+            <system value="http://hl7.org/fhir/diagnosis-role"/>
+            <code value="CM"/>
+            <display value="Comorbidity diagnosis"/>
+         </coding>
+      </role>
+   </diagnosis>
+   <hospitalization>
+      <admitSource>
+         <coding>
+            <system value="http://hl7.org/fhir/admit-source"/>
+            <code value="emd"/>
+            <display value="From accident/emergency department"/>
+         </coding>
+      </admitSource>
+   </hospitalization>
+   <serviceProvider>
+      <reference value="http://funke.imi.uni-luebeck.de/public/base/Organization/11907"/>
+   </serviceProvider>
+</Encounter>

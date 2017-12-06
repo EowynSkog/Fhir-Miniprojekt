@@ -1,0 +1,67 @@
+<ReferralRequest xmlns="http://hl7.org/fhir">
+   <contained>
+      <Condition xmlns="http://hl7.org/fhir">
+         <id value="1"/>
+         <identifier>
+            <system value="http://www.kh-hh.de/mio/Conditions"/>
+            <value value="C0394"/>
+         </identifier>
+         <verificationStatus value="provisional"/>
+         <category>
+            <coding>
+               <system value="http://hl7.org/fhir/condition-category"/>
+               <code value="encounter-diagnosis"/>
+               <display value="Encounter Diagnosis"/>
+            </coding>
+         </category>
+         <code>
+            <coding>
+               <system value="http://hl7.org/fhir/sid/icd-10"/>
+               <code value="S06.0"/>
+               <display value="Gehirnerschütterung"/>
+            </coding>
+         </code>
+      </Condition>
+   </contained>
+   <identifier>
+      <system value="http://www.kh-hh.de/mio/ReferralReq"/>
+      <value value="EW0094"/>
+   </identifier>
+   <status value="completed"/>
+   <intent value="order"/>
+   <type>
+      <coding>
+         <system value="http://snomed.info/sct"/>
+         <code value="183866009"/>
+         <display value="Referral to emergency clinic"/>
+      </coding>
+   </type>
+   <priority value="urgent"/>
+   <serviceRequested>
+      <coding>
+         <system value="http://snomed.info/sct"/>
+         <code value="707852009"/>
+         <display value="Inpatient management required"/>
+      </coding>
+   </serviceRequested>
+   <recipient>
+      <reference value="http://funke.imi.uni-luebeck.de/public/base/Practitioner/11860"/>
+   </recipient>
+   <reasonCode>
+      <coding>
+         <system value="http://snomed.info/sct"/>
+         <code value="127348004"/>
+         <display value="Motor vehicle accident victim"/>
+      </coding>
+   </reasonCode>
+   <reasonCode>
+      <coding>
+         <system value="http://snomed.info/sct"/>
+         <code value="110030002"/>
+         <display value="Concussion injury of brain"/>
+      </coding>
+   </reasonCode>
+   <reasonReference>
+      <reference value="#1"/>
+   </reasonReference>
+</ReferralRequest>
