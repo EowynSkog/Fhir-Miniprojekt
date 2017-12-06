@@ -14,6 +14,8 @@ import org.hl7.fhir.dstu3.model.Encounter;
 import org.hl7.fhir.dstu3.model.Encounter.EncounterHospitalizationComponent;
 import org.hl7.fhir.dstu3.model.Encounter.EncounterStatus;
 import org.hl7.fhir.dstu3.model.Enumerations.AdministrativeGender;
+import org.hl7.fhir.dstu3.model.EpisodeOfCare.EpisodeOfCareStatus;
+import org.hl7.fhir.dstu3.model.EpisodeOfCare;
 import org.hl7.fhir.dstu3.model.HumanName;
 import org.hl7.fhir.dstu3.model.Location;
 import org.hl7.fhir.dstu3.model.Narrative;
@@ -24,6 +26,7 @@ import org.hl7.fhir.dstu3.model.Period;
 import org.hl7.fhir.dstu3.model.Practitioner;
 import org.hl7.fhir.dstu3.model.Reference;
 import org.hl7.fhir.dstu3.model.ReferralRequest;
+import org.hl7.fhir.dstu3.model.Resource;
 import org.hl7.fhir.dstu3.model.ReferralRequest.ReferralCategory;
 import org.hl7.fhir.dstu3.model.ReferralRequest.ReferralPriority;
 import org.hl7.fhir.dstu3.model.ReferralRequest.ReferralRequestRequesterComponent;
@@ -32,6 +35,7 @@ import org.hl7.fhir.dstu3.model.ReferralRequest.ReferralRequestStatus;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.primitive.IdDt;
 import ca.uhn.fhir.parser.IParser;
+import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.gclient.StringClientParam;
 import ca.uhn.fhir.rest.gclient.TokenClientParam;
@@ -70,9 +74,7 @@ public class App {
 		// add patients marital status to married MaritalStatusCodes.M
 		CodeableConcept matStat = new CodeableConcept();
 		matStat.addCoding().setCode("D").setSystem("http://hl7.org/fhir/v3/MaritalStatus").setDisplay("Divorced");
-
 		patient.setMaritalStatus(matStat);
-
 		// Textuelle Zusammenfassung
 		Narrative na = new Narrative();
 		na.setDivAsString(
@@ -80,6 +82,7 @@ public class App {
 		na.setStatus(NarrativeStatus.GENERATED);
 		patient.setText(na);
 
+		
 		IParser jsonParser = ctx.newJsonParser();
 		jsonParser.setPrettyPrint(true);
 		String encoded = jsonParser.encodeResourceToString(patient);
@@ -130,12 +133,12 @@ public class App {
 				.setCode("110030002").setDisplay("Concussion injury of brain")));
 		// icd Diagnose
 		vDiag.setCode(new CodeableConcept().addCoding(new Coding().setSystem("http://hl7.org/fhir/sid/icd-10")
-				.setCode("S06.0").setDisplay("Gehirnersch�tterung")));
+				.setCode("S06.0").setDisplay("Gehirnerschütterung")));
 		vDiag.setSubjectTarget(patient);
 		vDiag.setAsserterTarget(emma);
 		na = new Narrative();
 		na.setDivAsString(
-				" Not�rztin Emma Emergency stellt dem Patienten Mythenmetz die Verdachtsdiagnose Gehirnersch�tterung.");
+				" Notärztin Emma Emergency stellt dem Patienten Mythenmetz die Verdachtsdiagnose Gehirnerschütterung.");
 		na.setStatus(NarrativeStatus.GENERATED);
 		vDiag.setText(na);
 
@@ -161,11 +164,33 @@ public class App {
 		einweisung.addReasonReference().setResource(vDiag);
 		na = new Narrative();
 		na.setDivAsString(
-				" Not�rztin Emma Emergency weist Patienten Mythenmetz nach einem Verkehrsunfall in die Notaufname ein. Der Patient bekommt die Verdachtsdiagnose Gehirnersch�tterung.");
+				"Notärztin Emma Emergency weist Patienten Mythenmetz nach einem Verkehrsunfall in die Notaufname ein. Der Patient bekommt die Verdachtsdiagnose Gehirnerschütterung.");
 		na.setStatus(NarrativeStatus.GENERATED);
 		einweisung.setText(na);
-
-		// eingetr�bter Bewusstseinszustand
+		
+		// Läd den neuen Patienten, die Verdachtsdiagnose und die Einweisung auf den Server (muss man nicht bei jedem Testdurchlauf machen ;) )
+//		  createResource(client, patient);
+//		  createResource(client, vDiag);
+//		  createResource(client, einweisung);
+		
+		
+		//EpisodeOfCare (=Zeitraum in dem das Mio Krankenhaus für die med. Versorgung des Patienten Mytenmetz verantwortlich ist) startet. Diese EpisodeOfCare verbindet alle zugehörigen Encounter
+		EpisodeOfCare eoc = new EpisodeOfCare();
+		eoc.setId(IdDt.newRandomUuid());
+		eoc.addIdentifier().setSystem("http://www.kh-hh.de/mio/EpisodesOfCare").setValue("EC009319");
+		eoc.setStatus(EpisodeOfCareStatus.ACTIVE);
+		eoc.addDiagnosis().setConditionTarget(vDiag).setRole(new CodeableConcept().addCoding(new Coding().setSystem("http://hl7.org/fhir/diagnosis-role").setCode("AD").setDisplay("Admission diagnosis")));
+		eoc.setPatientTarget(patient);
+		eoc.setManagingOrganizationTarget(khaus);
+		eoc.setPeriod(new Period().setStart(new GregorianCalendar(2017,10,13).getTime()));
+		eoc.addReferralRequest(new Reference(einweisung.getId()));
+		na = new Narrative();
+		na.setDivAsString("Zeitraum in dem das MIO Krankenhaus für die med. Versorgung des Patienten Mythenmetz verantwortlich ist beginnt am 13.10.2017. Grund dieses Krankhenhausaufenthalts ist die  Abklärung der Verdachtsdiagnose Gehirnerschütterung" );
+		na.setStatus(NarrativeStatus.GENERATED);
+		eoc.setText(na);
+		
+		
+		// eingetrübter Bewusstseinszustand
 		Condition condition = new Condition();
 		condition.setId(IdDt.newRandomUuid());
 		condition.addIdentifier().setSystem("http://www.kh-hh.de/mio/Conditions").setValue("C0397");
@@ -179,7 +204,7 @@ public class App {
 		condition.setAsserterTarget(adam);
 		na = new Narrative();
 		na.setDivAsString(
-				"Arzt Adam Careful stellt einen eingetr�bten Bewusstseinszustand beim Patient Mythenmetz fest.");
+				"Arzt Adam Careful stellt einen eingetrübten Bewusstseinszustand beim Patient Mythenmetz fest.");
 		na.setStatus(NarrativeStatus.GENERATED);
 		condition.setText(na);
 		
@@ -193,7 +218,7 @@ public class App {
 		aufnahme.setPriority(new CodeableConcept().addCoding(
 				new Coding().setSystem("http://hl7.org/fhir/v3/ActPriority").setCode("EL").setDisplay("elective")));
 		aufnahme.setSubjectTarget(patient);
-		aufnahme.addEpisodeOfCare(); //TODO
+		aufnahme.addEpisodeOfCare(new Reference(eoc.getId()));
 		aufnahme.addIncomingReferral(new Reference(einweisung.getId()));
 		aufnahme.setPeriod(new Period().setStart(new GregorianCalendar(2017, 9, 1).getTime()));
 		aufnahme.setServiceProvider(new Reference(khaus.getId()));
@@ -211,10 +236,30 @@ public class App {
 		
 		na = new Narrative();
 		na.setDivAsString(
-				"Wegen des eingetr�bten Bewusstseinszustands entscheidet der aufnehmende Arzt Adam Careful die direkte Aufnahme auf die chirurgische Intensivstation UKSH ICU 1");
+				"Wegen des eingetrübten Bewusstseinszustands entscheidet der aufnehmende Arzt Adam Careful die direkte Aufnahme auf die chirurgische Intensivstation UKSH ICU 1");
 		na.setStatus(NarrativeStatus.GENERATED);
 		aufnahme.setText(na);
-		//TODO Aktuallisierung der �berweisung auf abgeschlossen
+		
+		// Läd die EpisodeOf Care, den Beobachteten Patienten Zustand und die Patientenaufnahme auf den Server
+//		createResource(client, eoc);
+//		createResource(client, condition);
+//		createResource(client, aufnahme);
+		
+		//Einweisung ist nun Abgeschlossen. Der Status muss entsprechend auf dem Server aktualisiert werden
+		einweisung.setStatus(ReferralRequestStatus.COMPLETED);
+		//zum Updaten braucht man die Id, die der Server beim Erstellen vergeben hat. Um diese abzugreifen, hier nochmal eine Abfrage der Instenz
+		//keine schöne Lösung funktioniert aber ;) Kann man nochmal überarbeiten!
+		bundle = (Bundle) client.search().forResource(ReferralRequest.class)
+				.where(new TokenClientParam("identifier").exactly().code("EW0094"))
+				.prettyPrint()
+				.execute();		
+		entry = bundle.getEntry().get(0);
+		ReferralRequest einweisungServer = (ReferralRequest) entry.getResource();
+		
+		einweisung.setId(einweisungServer.getId());
+		//bitte nicht bei jedem Tesdurchlauf den Server zumüllen
+//		MethodOutcome outcome = client.update().resource(einweisung).execute();
+		
 		
 
 		// Entlassung
@@ -253,5 +298,17 @@ public class App {
 		}
 
 	}
+	
+	  private static void createResource(IGenericClient client, Resource res)
+	    {
+	    	MethodOutcome outcome = client.create()
+	    			   .resource(res)
+	    			   .prettyPrint()
+	    			   .encodedJson()
+	    			   .execute();
+	    	
+	    	System.out.println("Got ID of created Resource: " + outcome.getId());
+	    	
+	    }
 
 }
