@@ -17,6 +17,7 @@ import org.hl7.fhir.dstu3.model.Enumerations.AdministrativeGender;
 import org.hl7.fhir.dstu3.model.EpisodeOfCare.EpisodeOfCareStatus;
 import org.hl7.fhir.dstu3.model.EpisodeOfCare;
 import org.hl7.fhir.dstu3.model.HumanName;
+import org.hl7.fhir.dstu3.model.Identifier;
 import org.hl7.fhir.dstu3.model.Location;
 import org.hl7.fhir.dstu3.model.Narrative;
 import org.hl7.fhir.dstu3.model.Narrative.NarrativeStatus;
@@ -27,12 +28,16 @@ import org.hl7.fhir.dstu3.model.Practitioner;
 import org.hl7.fhir.dstu3.model.Reference;
 import org.hl7.fhir.dstu3.model.ReferralRequest;
 import org.hl7.fhir.dstu3.model.Resource;
+import org.hl7.fhir.dstu3.model.RiskAssessment;
+import org.hl7.fhir.dstu3.model.RiskAssessment.RiskAssessmentStatus;
+import org.hl7.fhir.dstu3.model.Type;
 import org.hl7.fhir.dstu3.model.ReferralRequest.ReferralCategory;
 import org.hl7.fhir.dstu3.model.ReferralRequest.ReferralPriority;
 import org.hl7.fhir.dstu3.model.ReferralRequest.ReferralRequestRequesterComponent;
 import org.hl7.fhir.dstu3.model.ReferralRequest.ReferralRequestStatus;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.model.primitive.DateTimeDt;
 import ca.uhn.fhir.model.primitive.IdDt;
 import ca.uhn.fhir.parser.IParser;
 import ca.uhn.fhir.rest.api.MethodOutcome;
@@ -44,6 +49,7 @@ public class App {
 
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
+		//TODO die RandomUuids funktionieren nur wenn die Ressourcen gleichzeitig (im Bundle)auf den Server geladen werden. Muss noch implementiert werden und getestet werden, ob das wirklich funktioniert
 		// connecting to a DSTU3 compliant server
 		FhirContext ctx = FhirContext.forDstu3();
 
@@ -57,10 +63,8 @@ public class App {
 		// Give the patient a temporary UUID so that other resources in
 		// the transaction can refer to it
 		patient.setId(IdDt.newRandomUuid());
-		// random number for the ID
-		int patID = (int) (Math.random() * 10000);
 		// add an ID
-		patient.addIdentifier().setSystem("http://www.kh-hh.de/mio/patients").setValue(Integer.toString((int) patID));
+		patient.addIdentifier().setSystem("http://www.kh-hh.de/mio/patients").setValue("PID0092342");
 		// add patients gender
 		patient.setGender(AdministrativeGender.MALE);
 		// add patients name
@@ -198,6 +202,8 @@ public class App {
 		condition.setVerificationStatus(ConditionVerificationStatus.DIFFERENTIAL);
 		condition.addCategory().addCoding().setSystem("http://hl7.org/fhir/condition-category")
 				.setCode("encounter-diagnosis").setDisplay("Encounter Diagnosis");
+		condition.setSeverity(new CodeableConcept().addCoding(new Coding().setSystem("http://snomed.info/sct")
+				.setCode("24484000").setDisplay("Severe")));
 		condition.setCode(new CodeableConcept().addCoding(new Coding().setSystem("http://snomed.info/sct")
 				.setCode("40917007").setDisplay("Clouded consciousness")));
 		condition.setSubjectTarget(patient);
@@ -240,10 +246,36 @@ public class App {
 		na.setStatus(NarrativeStatus.GENERATED);
 		aufnahme.setText(na);
 		
+		//Patient Id vom Server holen
+		bundle = (Bundle) client.search().forResource(Patient.class)
+				.where(new TokenClientParam("identifier").exactly().code("PID0092342"))
+				.prettyPrint()
+				.execute();		
+		entry = bundle.getEntry().get(0);
+		Patient patientServer = (Patient) entry.getResource();
+		
+		
+		//Der Arzt Careful stuft den Gesundheitszustand des Patienten Mythenmetz auf "akut gefährdet" ein. (Aufgurnd der Verdachtsdiagnose im Zusammenhang mit dem beobachteten eingetrübten Bewusstseinszustand) 
+		RiskAssessment riskLevel = new RiskAssessment();
+		riskLevel.setIdentifier(new Identifier().setSystem("http://www.kh-hh.de/mio/RiskLevel").setValue("RL04840"));
+		riskLevel.setStatus(RiskAssessmentStatus.REGISTERED);
+		riskLevel.setSubject(new Reference(patientServer.getId()));
+		riskLevel.setContext(new Reference(eoc.getId()));
+		riskLevel.setOccurrence(new Period().setStart(new GregorianCalendar(2017,10,13).getTime()));
+		riskLevel.setConditionTarget(condition);
+		riskLevel.setPerformer(new Reference(adam.getId()));
+		riskLevel.addPrediction().setOutcome(new CodeableConcept().addCoding(
+				new Coding().setSystem("http://snomed.info/sct").setCode("18131002").setDisplay("Acute fulminating")));
+		riskLevel.setMitigation("Monitoring auf der Intensivstation");
+		na = new Narrative();
+		na.setDivAsString("Einstufung des Patienten Mythenmetz als akut gefähdet, durch den Arzt Careful");
+		
 		// Läd die EpisodeOf Care, den Beobachteten Patienten Zustand und die Patientenaufnahme auf den Server
+		//bitte nicht bei jedem Testdurchlauf den Server zumüllen
 //		createResource(client, eoc);
 //		createResource(client, condition);
 //		createResource(client, aufnahme);
+//		createResource(client, riskLevel);
 		
 		//Einweisung ist nun Abgeschlossen. Der Status muss entsprechend auf dem Server aktualisiert werden
 		einweisung.setStatus(ReferralRequestStatus.COMPLETED);
@@ -255,14 +287,14 @@ public class App {
 				.execute();		
 		entry = bundle.getEntry().get(0);
 		ReferralRequest einweisungServer = (ReferralRequest) entry.getResource();
-		
+				
 		einweisung.setId(einweisungServer.getId());
-		//bitte nicht bei jedem Tesdurchlauf den Server zumüllen
+		//bitte nicht bei jedem Testdurchlauf den Server zumüllen
 //		MethodOutcome outcome = client.update().resource(einweisung).execute();
 		
 		
 
-		// Entlassung
+		// TODO Entlassung hier ist noch viel Blödsinn drin 
 		// snomed 707851002 | Inpatient management not required (finding) |
 		Encounter entlassung = new Encounter();
 		entlassung.addIdentifier().setSystem("http://www.kh-hh.de/mio/Encounter").setValue("En40308");
