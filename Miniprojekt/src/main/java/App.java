@@ -5,6 +5,8 @@ import java.util.GregorianCalendar;
 
 import org.hl7.fhir.dstu3.model.Bundle;
 import org.hl7.fhir.dstu3.model.Bundle.BundleEntryComponent;
+import org.hl7.fhir.dstu3.model.ClinicalImpression;
+import org.hl7.fhir.dstu3.model.ClinicalImpression.ClinicalImpressionStatus;
 import org.hl7.fhir.dstu3.model.CodeableConcept;
 import org.hl7.fhir.dstu3.model.Coding;
 import org.hl7.fhir.dstu3.model.Condition;
@@ -60,9 +62,6 @@ public class App {
 
 		// Create a patient object
 		Patient patient = new Patient();
-		// Give the patient a temporary UUID so that other resources in
-		// the transaction can refer to it
-		patient.setId(IdDt.newRandomUuid());
 		// add an ID
 		patient.addIdentifier().setSystem("http://www.kh-hh.de/mio/patients").setValue("PID0092342");
 		// add patients gender
@@ -85,6 +84,14 @@ public class App {
 				"Patient Hildegunst von Mythenmetz, geboren am 6.7.1489, Familienstand: geschieden, Adresse: Silbendrechslerstr. 4, 94041 Lindwurmfeste, Zamonien");
 		na.setStatus(NarrativeStatus.GENERATED);
 		patient.setText(na);
+		
+		// Läd den neuen Patienten auf den Server (muss man nicht bei jedem Testdurchlauf machen ;) )
+		MethodOutcome outcome = client.create()
+	 			   .resource(patient)
+	 			   .prettyPrint()
+	 			   .encodedJson()
+	 			   .execute();
+			IdDt patientId = (IdDt) outcome.getId();
 
 		
 		IParser jsonParser = ctx.newJsonParser();
@@ -138,17 +145,24 @@ public class App {
 		// icd Diagnose
 		vDiag.setCode(new CodeableConcept().addCoding(new Coding().setSystem("http://hl7.org/fhir/sid/icd-10")
 				.setCode("S06.0").setDisplay("Gehirnerschütterung")));
-		vDiag.setSubjectTarget(patient);
+		vDiag.setSubject(new Reference(patientId));
 		vDiag.setAsserterTarget(emma);
 		na = new Narrative();
 		na.setDivAsString(
 				" Notärztin Emma Emergency stellt dem Patienten Mythenmetz die Verdachtsdiagnose Gehirnerschütterung.");
 		na.setStatus(NarrativeStatus.GENERATED);
 		vDiag.setText(na);
+		
+		// Läd die Verdachtsdiagnose auf den Server (muss man nicht bei jedem Testdurchlauf machen ;) )
+		outcome = client.create()
+ 			   .resource(vDiag)
+ 			   .prettyPrint()
+ 			   .encodedJson()
+ 			   .execute();
+		IdDt vDiagId = (IdDt) outcome.getId();
 
 		// Einweisung nach Verkehrsunfall
 		ReferralRequest einweisung = new ReferralRequest();
-		einweisung.setId(IdDt.newRandomUuid());
 		einweisung.addIdentifier().setSystem("http://www.kh-hh.de/mio/ReferralReq").setValue("EW0094");
 		einweisung.setStatus(ReferralRequestStatus.ACTIVE);
 		einweisung.setIntent(ReferralCategory.ORDER);
@@ -157,7 +171,7 @@ public class App {
 		einweisung.setPriority(ReferralPriority.ASAP);
 		einweisung.addServiceRequested(new CodeableConcept().addCoding(new Coding().setSystem("http://snomed.info/sct")
 				.setCode("707852009").setDisplay("Inpatient management required")));
-		einweisung.setSubjectTarget(patient);
+		einweisung.setSubject(new Reference(patientId));
 		einweisung.setRequester(new ReferralRequestRequesterComponent().setAgentTarget(emma));
 		einweisung.addRecipient().setResource(adam);
 		einweisung.addReasonCode().addCoding().setSystem("http://snomed.info/sct").setCode("127348004")
@@ -172,11 +186,14 @@ public class App {
 		na.setStatus(NarrativeStatus.GENERATED);
 		einweisung.setText(na);
 		
-		// Läd den neuen Patienten, die Verdachtsdiagnose und die Einweisung auf den Server (muss man nicht bei jedem Testdurchlauf machen ;) )
-//		  createResource(client, patient);
-//		  createResource(client, vDiag);
-//		  createResource(client, einweisung);
-		
+		// Läd die Einweisung auf den Server (muss man nicht bei jedem Testdurchlauf machen ;) )
+		outcome = client.create()
+	 			   .resource(einweisung)
+	 			   .prettyPrint()
+	 			   .encodedJson()
+	 			   .execute();
+			IdDt einweisungId = (IdDt) outcome.getId();
+					
 		
 		//EpisodeOfCare (=Zeitraum in dem das Mio Krankenhaus für die med. Versorgung des Patienten Mytenmetz verantwortlich ist) startet. Diese EpisodeOfCare verbindet alle zugehörigen Encounter
 		EpisodeOfCare eoc = new EpisodeOfCare();
@@ -184,14 +201,23 @@ public class App {
 		eoc.addIdentifier().setSystem("http://www.kh-hh.de/mio/EpisodesOfCare").setValue("EC009319");
 		eoc.setStatus(EpisodeOfCareStatus.ACTIVE);
 		eoc.addDiagnosis().setConditionTarget(vDiag).setRole(new CodeableConcept().addCoding(new Coding().setSystem("http://hl7.org/fhir/diagnosis-role").setCode("AD").setDisplay("Admission diagnosis")));
-		eoc.setPatientTarget(patient);
+		eoc.setPatient(new Reference(patientId));
 		eoc.setManagingOrganizationTarget(khaus);
 		eoc.setPeriod(new Period().setStart(new GregorianCalendar(2017,10,13).getTime()));
-		eoc.addReferralRequest(new Reference(einweisung.getId()));
+		eoc.addReferralRequest(new Reference(einweisungId));
 		na = new Narrative();
 		na.setDivAsString("Zeitraum in dem das MIO Krankenhaus für die med. Versorgung des Patienten Mythenmetz verantwortlich ist beginnt am 13.10.2017. Grund dieses Krankhenhausaufenthalts ist die  Abklärung der Verdachtsdiagnose Gehirnerschütterung" );
 		na.setStatus(NarrativeStatus.GENERATED);
 		eoc.setText(na);
+		
+		// Läd die EoC auf den Server (muss man nicht bei jedem Testdurchlauf machen ;) )
+		outcome = client.create()
+	 			   .resource(eoc)
+	 			   .prettyPrint()
+	 			   .encodedJson()
+	 			   .execute();
+			IdDt eocId = (IdDt) outcome.getId();
+		
 		
 		
 		// eingetrübter Bewusstseinszustand
@@ -214,6 +240,13 @@ public class App {
 		na.setStatus(NarrativeStatus.GENERATED);
 		condition.setText(na);
 		
+		// Läd die Condition auf den Server (muss man nicht bei jedem Testdurchlauf machen ;) )
+		outcome = client.create()
+	 			   .resource(condition)
+	 			   .prettyPrint()
+	 			   .encodedJson()
+	 			   .execute();
+			IdDt conditionId = (IdDt) outcome.getId();
 		
 		
 		Encounter aufnahme = new Encounter();
@@ -223,9 +256,9 @@ public class App {
 				.setDisplay("inpatient acute"));
 		aufnahme.setPriority(new CodeableConcept().addCoding(
 				new Coding().setSystem("http://hl7.org/fhir/v3/ActPriority").setCode("EL").setDisplay("elective")));
-		aufnahme.setSubjectTarget(patient);
-		aufnahme.addEpisodeOfCare(new Reference(eoc.getId()));
-		aufnahme.addIncomingReferral(new Reference(einweisung.getId()));
+		aufnahme.setSubject(new Reference(patientId));
+		aufnahme.addEpisodeOfCare(new Reference(eocId));
+		aufnahme.addIncomingReferral(new Reference(einweisungId));
 		aufnahme.setPeriod(new Period().setStart(new GregorianCalendar(2017, 9, 1).getTime()));
 		aufnahme.setServiceProvider(new Reference(khaus.getId()));
 		aufnahme.addReason().addCoding().setCode("407153006").setSystem("http://snomed.info/sct")
@@ -234,6 +267,7 @@ public class App {
 				.addType(new CodeableConcept().addCoding(new Coding().setCode("ADM").setDisplay("admitter")
 						.setSystem("http://hl7.org/fhir/v3/ParticipationType")))
 				.setIndividual(new Reference((adam.getId())));
+		
 		aufnahme.addDiagnosis().setConditionTarget(vDiag).setRole(new CodeableConcept().addCoding(new Coding().setSystem("http://hl7.org/fhir/diagnosis-role").setCode("AD").setDisplay("Admission diagnosis")));
 		aufnahme.addDiagnosis().setConditionTarget(condition).setRole(new CodeableConcept().addCoding(new Coding().setSystem("http://hl7.org/fhir/diagnosis-role").setCode("CM").setDisplay("Comorbidity diagnosis")));
 		aufnahme.setHospitalization(new EncounterHospitalizationComponent()
@@ -246,49 +280,60 @@ public class App {
 		na.setStatus(NarrativeStatus.GENERATED);
 		aufnahme.setText(na);
 		
-		//Patient Id vom Server holen
-		bundle = (Bundle) client.search().forResource(Patient.class)
-				.where(new TokenClientParam("identifier").exactly().code("PID0092342"))
-				.prettyPrint()
-				.execute();		
-		entry = bundle.getEntry().get(0);
-		Patient patientServer = (Patient) entry.getResource();
+		// Läd die aufnahme auf den Server (muss man nicht bei jedem Testdurchlauf machen ;) )
+				outcome = client.create()
+			 			   .resource(aufnahme)
+			 			   .prettyPrint()
+			 			   .encodedJson()
+			 			   .execute();
+					IdDt aufnahmeId = (IdDt) outcome.getId();
 		
 		
-		//Der Arzt Careful stuft den Gesundheitszustand des Patienten Mythenmetz auf "akut gefährdet" ein. (Aufgurnd der Verdachtsdiagnose im Zusammenhang mit dem beobachteten eingetrübten Bewusstseinszustand) 
-		RiskAssessment riskLevel = new RiskAssessment();
-		riskLevel.setIdentifier(new Identifier().setSystem("http://www.kh-hh.de/mio/RiskLevel").setValue("RL04840"));
-		riskLevel.setStatus(RiskAssessmentStatus.REGISTERED);
-		riskLevel.setSubject(new Reference(patientServer.getId()));
-		riskLevel.setContext(new Reference(eoc.getId()));
-		riskLevel.setOccurrence(new Period().setStart(new GregorianCalendar(2017,10,13).getTime()));
-		riskLevel.setConditionTarget(condition);
-		riskLevel.setPerformer(new Reference(adam.getId()));
-		riskLevel.addPrediction().setOutcome(new CodeableConcept().addCoding(
+		//Der Arzt Careful stuft den Gesundheitszustand des Patienten Mythenmetz auf "akut bedroht" ein. (Aufgurnd der Verdachtsdiagnose im Zusammenhang mit dem beobachteten eingetrübten Bewusstseinszustand) 
+// richtige (?!) Lösung über ClinicalImpression siehe unten
+//		RiskAssessment riskLevel = new RiskAssessment();
+//		riskLevel.setIdentifier(new Identifier().setSystem("http://www.kh-hh.de/mio/RiskLevel").setValue("RL04840"));
+//		riskLevel.setStatus(RiskAssessmentStatus.REGISTERED);
+//		riskLevel.setSubject(new Reference(patientId));
+//		riskLevel.setContext(new Reference(eocId));
+//		riskLevel.setOccurrence(new Period().setStart(new GregorianCalendar(2017,10,13).getTime()));
+//		riskLevel.setCondition(new Reference(conditionId));
+//		riskLevel.setPerformer(new Reference(adam.getId()));
+//		riskLevel.addPrediction().setOutcome(new CodeableConcept().addCoding(
+//				new Coding().setSystem("http://snomed.info/sct").setCode("18131002").setDisplay("Acute fulminating")));
+//		riskLevel.setMitigation("Monitoring auf der Intensivstation");
+//		na = new Narrative();
+//		na.setDivAsString("Einstufung des Patienten Mythenmetz als akut gefähdet, durch den Arzt Careful");
+//		na.setStatus(NarrativeStatus.GENERATED);
+		
+		ClinicalImpression cImp = new ClinicalImpression();
+		cImp.addIdentifier().setSystem("http://www.kh-hh.de/mio/ClinImp").setValue("CI04840");
+		cImp.setStatus(ClinicalImpressionStatus.DRAFT);
+		cImp.setCode(new CodeableConcept().addCoding(
 				new Coding().setSystem("http://snomed.info/sct").setCode("18131002").setDisplay("Acute fulminating")));
-		riskLevel.setMitigation("Monitoring auf der Intensivstation");
-		na = new Narrative();
-		na.setDivAsString("Einstufung des Patienten Mythenmetz als akut gefähdet, durch den Arzt Careful");
+		cImp.setSubject(new Reference(patientId));
+		cImp.setContext(new Reference(eocId));
+		cImp.setContext(new Reference(aufnahmeId));
+		cImp.setEffective(new Period().setStart(new GregorianCalendar(2017,10,13).getTime()));
+		cImp.setDate(new GregorianCalendar(2017,10,13).getTime());
+		cImp.setAssessorTarget(adam);
+		cImp.addProblem(new Reference(conditionId));
+		cImp.setSummary("Zustand des Patienten ist akut bedroht, da der Bewusstseinszustand eingetrübt ist");
 		
-		// Läd die EpisodeOf Care, den Beobachteten Patienten Zustand und die Patientenaufnahme auf den Server
+		
+		// Läd Clinische Beurteilung auf den Server
 		//bitte nicht bei jedem Testdurchlauf den Server zumüllen
-//		createResource(client, eoc);
-//		createResource(client, condition);
-//		createResource(client, aufnahme);
-//		createResource(client, riskLevel);
+		outcome = client.create()
+		   .resource(cImp)
+		   .prettyPrint()
+		   .encodedJson()
+		   .execute();
+	IdDt cImpId = (IdDt) outcome.getId();
 		
 		//Einweisung ist nun Abgeschlossen. Der Status muss entsprechend auf dem Server aktualisiert werden
 		einweisung.setStatus(ReferralRequestStatus.COMPLETED);
-		//zum Updaten braucht man die Id, die der Server beim Erstellen vergeben hat. Um diese abzugreifen, hier nochmal eine Abfrage der Instenz
-		//keine schöne Lösung funktioniert aber ;) Kann man nochmal überarbeiten!
-		bundle = (Bundle) client.search().forResource(ReferralRequest.class)
-				.where(new TokenClientParam("identifier").exactly().code("EW0094"))
-				.prettyPrint()
-				.execute();		
-		entry = bundle.getEntry().get(0);
-		ReferralRequest einweisungServer = (ReferralRequest) entry.getResource();
 				
-		einweisung.setId(einweisungServer.getId());
+		einweisung.setId(einweisungId);
 		//bitte nicht bei jedem Testdurchlauf den Server zumüllen
 //		MethodOutcome outcome = client.update().resource(einweisung).execute();
 		
@@ -342,5 +387,6 @@ public class App {
 	    	System.out.println("Got ID of created Resource: " + outcome.getId());
 	    	
 	    }
+	 
 
 }
